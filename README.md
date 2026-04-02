@@ -14,7 +14,6 @@ This project demonstrates a Proof of Concept (PoC) combining Kubernetes Cluster 
 - Vagrant with libvirt provider
 - kubectl
 - kind (Kubernetes in Docker)
-- SSH key for VM access
 
 ## Setup Steps
 
