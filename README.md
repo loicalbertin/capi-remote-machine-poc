@@ -29,6 +29,8 @@ This will create two VMs:
 - Control plane VM at `192.168.57.10`
 - Worker VM at `192.168.57.11`
 
+Required softwares are automatically installed on those VMs. 
+
 ### 2. Setup Management Cluster
 
 Run the setup script to create a management cluster with Cluster API components:
@@ -74,5 +76,5 @@ To clean up the resources:
 
 ```bash
 vagrant destroy -f
-kind delete cluster capi-management
+kind delete clusters capi-management
 ```
