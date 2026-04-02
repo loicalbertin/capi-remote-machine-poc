@@ -1,0 +1,159 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: RemoteCluster
+metadata:
+  name: cluster2-infrastructure
+  namespace: default
+spec:
+  controlPlaneEndpoint:
+    host: "192.168.57.10"
+    port: 6443
+
+---
+
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: RemoteMachineTemplate
+metadata:
+  name: cluster2-cp-machine-template
+  namespace: default
+spec:
+  template:
+    spec:
+      pool: cp
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: RemoteMachineTemplate
+metadata:
+  name: cluster2-worker-machine-template
+  namespace: default
+spec:
+  template:
+    spec:
+      pool: worker
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: PooledRemoteMachine
+metadata:
+  name: cluster2-remote-cp-0
+  namespace: default
+spec:
+  pool: cp
+  machine:
+    address: 192.168.57.10  # IP de la VM control-plane
+    port: 22
+    user: vagrant
+    useSudo: true
+    sshKeyRef:
+      # This defines which SSH key to use for connecting to the machine. The Secret needs to have key 'value' with the SSH private key in it.
+      name: ssh-key-secret
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: PooledRemoteMachine
+metadata:
+  name: cluster2-remote-worker-0
+  namespace: default
+spec:
+  pool: worker
+  machine:
+    address: 192.168.57.11  # IP de la VM control-plane
+    port: 22
+    user: vagrant
+    useSudo: true
+    sshKeyRef:
+      # This defines which SSH key to use for connecting to the machine. The Secret needs to have key 'value' with the SSH private key in it.
+      name: ssh-key-secret
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
+metadata:
+  name: cluster2-control-plane
+  namespace: default
+spec:
+  replicas: 1
+  version: v1.35.0
+  kubeadmConfigSpec: 
+    initConfiguration:
+      localAPIEndpoint:
+        advertiseAddress: "192.168.57.10"
+        bindPort: 6443
+      nodeRegistration:
+        kubeletExtraArgs:
+          node-ip: "192.168.57.10"
+    # preKubeadmCommands:
+    #   - hostnamectl hostname "{{ .MachineName }}"
+    #   - echo "{{ .MachineName }}" >/etc/hostname
+    #   - sed -i "s/127.0.0.1.*/127.0.0.1 {{ .MachineName }} localhost/" /etc/hosts
+    postKubeadmCommands:
+      - kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: RemoteMachineTemplate
+      name: cluster2-cp-machine-template
+      namespace: default
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: cluster2-infrastructure
+  namespace: default
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+      - 192.168.0.0/16
+    serviceDomain: cluster.local
+    services:
+      cidrBlocks:
+      - 10.128.0.0/12
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: KubeadmControlPlane
+    name: cluster2-control-plane
+    namespace: default
+  # infrastructureRef:
+  #   apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+  #   kind: RemoteMachineTemplate
+  #   name: cluster2-worker-machine-template
+  #   namespace: default
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: RemoteCluster
+    name: cluster2-infrastructure
+    namespace: default
+---
+
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: cluster2-worker-deployment
+  namespace: default
+spec:
+  clusterName: cluster2-infrastructure
+  replicas: 1
+  template:
+    spec:
+      clusterName: cluster2-infrastructure
+      version: v1.35.0
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
+          name: cluster2-worker-config
+          namespace: default
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: RemoteMachineTemplate
+        name: cluster2-worker-machine-template
+        namespace: default
+---
+kind: KubeadmConfigTemplate
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+metadata:
+  name: cluster2-worker-config
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-ip: "192.168.57.11"

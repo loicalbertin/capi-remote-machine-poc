@@ -1,0 +1,10 @@
+resources:
+  - secret.yaml
+
+secretGenerator:
+- name: ssh-key-secret
+  behavior: merge
+  files:
+  - value=.vagrant/id_rsa_vagrant
+  - .vagrant/id_rsa_vagrant
+  - .vagrant/id_rsa_vagrant.pub
